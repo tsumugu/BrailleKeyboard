@@ -232,9 +232,9 @@ var keyCodeToTenji = (key)=> {
 
 class Main {
   // まずは変数を定義する
-  constructor(romajiToHiraganaDic) {
+  constructor(romajiToHiraganaDic, bus) {
+    this._bus = bus
     this._romajiToHiraganaDic = romajiToHiraganaDic
-
     this._hiraganaText = ""
     this._romajiText = ""
     this._modeText = ""
@@ -344,7 +344,33 @@ class Main {
   }
 
   // 変数が書き換わったときに呼び出される関数たち
-  onChangeModeText() {
+  onChangeModeText(num) {
+    if (this._modeText != "") {
+      var wbuf = undefined
+      if (num == 1) {
+        wbuf = Buffer.from([0x01])
+      } else if (num == 2) {
+        wbuf = Buffer.from([0x02])
+      } else if (num == 3) {
+        wbuf = Buffer.from([0x03])
+      } else if (num == 4) {
+        wbuf = Buffer.from([0x04])
+      } else if (num == 5) {
+        wbuf = Buffer.from([0x05])
+      }
+      if (wbuf != undefined) {
+        this._bus.i2cWrite(0x08, wbuf.length, wbuf)
+        .then(data => {
+          console.log(s, data)
+        })
+      }
+    } else {
+      var wbuf = Buffer.from([0x06])
+      this._bus.i2cWrite(0x08, wbuf.length, wbuf)
+      .then(data => {
+        console.log(s, data)
+      })
+    }
     // 初期化時にも出てしまってやかましいので表示しない。
     // ステータスランプなどで実装する？
     /*
@@ -378,6 +404,17 @@ class Main {
         "hiraganaText": this._hiraganaText,
         "romajiText": this._romajiText
       })
+      // 最後の1ひらがなを送る
+      var reversedRomajiText = this._romajiText.split("/").reverse()[1]
+      reversedRomajiText.split('').forEach(s => {
+        if (this._bus != undefined) {
+          const wbuf = Buffer.from(s)
+          this._bus.i2cWrite(0x08, wbuf.length, wbuf)
+          .then(data => {
+            console.log(s, data)
+          })
+        }
+      })
       //
     }
   }
@@ -397,7 +434,7 @@ class Main {
     } else {
       this._modeText = ""
     }
-    this.onChangeModeText()
+    this.onChangeModeText(1)
   }
   onChangeIsHanDakutenMode() {
     // 他のフラグをリセット
@@ -415,7 +452,7 @@ class Main {
     } else {
       this._modeText = ""
     }
-    this.onChangeModeText()
+    this.onChangeModeText(2)
   }
   onChangeIsSuujiMode() {
     // 他のフラグをリセット
@@ -433,7 +470,7 @@ class Main {
     } else {
       this._modeText = ""
     }
-    this.onChangeModeText()
+    this.onChangeModeText(3)
   }
   onChangeIsAlphabetMode() {
     // 他のフラグをリセット
@@ -451,7 +488,7 @@ class Main {
     } else {
       this._modeText = ""
     }
-    this.onChangeModeText()
+    this.onChangeModeText(4)
   }
   onChangeIsLargeAlphabetMode() {
     // 他のフラグをリセット
@@ -460,7 +497,7 @@ class Main {
     this._isSuujiMode = false
     //this._isAlphabetMode = false
     //this._isLargeAlphabetMode = false
-    this._isYouonnMode = false
+    this._isYou7onnMode = false
     this._isDakuYouonnMode = false
     this._isHanDakuYouonnMode = false
     //
@@ -469,7 +506,7 @@ class Main {
     } else {
       this._modeText = "【英字モード】"
     }
-    this.onChangeModeText()
+    this.onChangeModeText(4)
   }
   onChangeIsYouonnMode() {
     // 他のフラグをリセット
@@ -487,7 +524,7 @@ class Main {
     } else {
       this._modeText = ""
     }
-    this.onChangeModeText()
+    this.onChangeModeText(5)
   }
   onChangeIsDakuYouonnMode() {
     // 他のフラグをリセット
@@ -505,7 +542,7 @@ class Main {
     } else {
       this._modeText = ""
     }
-    this.onChangeModeText()
+    this.onChangeModeText(5)
   }
   onChangeIsHanDakuYouonnMode() {
     // 他のフラグをリセット
@@ -523,109 +560,164 @@ class Main {
     } else {
       this._modeText = ""
     }
-    this.onChangeModeText()
+    this.onChangeModeText(5)
   }
   // ここまでonChange
 }
+
+const keypress = require('keypress');
+const i2c = require('i2c-bus');
+
+console.log("Boot Complete! Now accepting input.");
 
 // ローマ字 to ひらがなの変換テーブルを作成
 // 毎回生成していると非効率なのでJSONを読み込む
 const romajiToHiraganaDicJSON = '{"-":"ー","~":"〜","z/":"・","z.":"…","z,":"‥","zh":"←","zj":"↓","zk":"↑","zl":"→","z-":"〜","z[":"『","z]":"』","[":"「","]":"」","va":"ゔぁ","vi":"ゔぃ","vu":"ゔ","ve":"ゔぇ","vo":"ゔぉ","vya":"ゔゃ","vyi":"ゔぃ","vyu":"ゔゅ","vye":"ゔぇ","vyo":"ゔょ","qq":"っ","vv":"っ","ll":"っ","xx":"っ","kk":"っ","gg":"っ","ss":"っ","zz":"っ","jj":"っ","tt":"っ","dd":"っ","hh":"っ","ff":"っ","bb":"っ","pp":"っ","mm":"っ","yy":"っ","rr":"っ","ww":"っ","www":"w","cc":"っ","kya":"きゃ","kyi":"きぃ","kyu":"きゅ","kye":"きぇ","kyo":"きょ","gya":"ぎゃ","gyi":"ぎぃ","gyu":"ぎゅ","gye":"ぎぇ","gyo":"ぎょ","sya":"しゃ","syi":"しぃ","syu":"しゅ","sye":"しぇ","syo":"しょ","sha":"しゃ","shi":"し","shu":"しゅ","she":"しぇ","sho":"しょ","zya":"じゃ","zyi":"じぃ","zyu":"じゅ","zye":"じぇ","zyo":"じょ","tya":"ちゃ","tyi":"ちぃ","tyu":"ちゅ","tye":"ちぇ","tyo":"ちょ","cha":"ちゃ","chi":"ち","chu":"ちゅ","che":"ちぇ","cho":"ちょ","cya":"ちゃ","cyi":"ちぃ","cyu":"ちゅ","cye":"ちぇ","cyo":"ちょ","dya":"ぢゃ","dyi":"ぢぃ","dyu":"ぢゅ","dye":"ぢぇ","dyo":"ぢょ","tsa":"つぁ","tsi":"つぃ","tse":"つぇ","tso":"つぉ","tha":"てゃ","thi":"てぃ","ti":"てぃ","thu":"てゅ","the":"てぇ","tho":"てょ","tyu":"てゅ","dha":"でゃ","dhi":"でぃ","di":"でぃ","dhu":"でゅ","dhe":"でぇ","dho":"でょ","dyu":"でゅ","twa":"とぁ","twi":"とぃ","twu":"とぅ","twe":"とぇ","two":"とぉ","tu":"とぅ","dwa":"どぁ","dwi":"どぃ","dwu":"どぅ","dwe":"どぇ","dwo":"どぉ","du":"どぅ","nya":"にゃ","nyi":"にぃ","nyu":"にゅ","nye":"にぇ","nyo":"にょ","hya":"ひゃ","hyi":"ひぃ","hyu":"ひゅ","hye":"ひぇ","hyo":"ひょ","bya":"びゃ","byi":"びぃ","byu":"びゅ","bye":"びぇ","byo":"びょ","pya":"ぴゃ","pyi":"ぴぃ","pyu":"ぴゅ","pye":"ぴぇ","pyo":"ぴょ","fa":"ふぁ","fi":"ふぃ","fu":"ふ","fe":"ふぇ","fo":"ふぉ","fya":"ふゃ","fyu":"ふゅ","fyo":"ふょ","hwa":"ふぁ","hwi":"ふぃ","hwe":"ふぇ","hwo":"ふぉ","hwyu":"ふゅ","mya":"みゃ","myi":"みぃ","myu":"みゅ","mye":"みぇ","myo":"みょ","rya":"りゃ","ryi":"りぃ","ryu":"りゅ","rye":"りぇ","ryo":"りょ","n":"ん","nn":"ん","n":"ん","xn":"ん","a":"あ","i":"い","u":"う","wu":"う","e":"え","o":"お","xa":"ぁ","xi":"ぃ","xu":"ぅ","xe":"ぇ","xo":"ぉ","la":"ぁ","li":"ぃ","lu":"ぅ","le":"ぇ","lo":"ぉ","lyi":"ぃ","xyi":"ぃ","lye":"ぇ","xye":"ぇ","ye":"いぇ","ka":"か","ki":"き","ku":"く","ke":"け","ko":"こ","xka":"ヵ","xke":"ヶ","lka":"ヵ","lke":"ヶ","ga":"が","gi":"ぎ","gu":"ぐ","ge":"げ","go":"ご","sa":"さ","si":"し","su":"す","se":"せ","so":"そ","ca":"か","ci":"し","cu":"く","ce":"せ","co":"こ","qa":"くぁ","qi":"くぃ","qu":"く","qe":"くぇ","qo":"くぉ","kwa":"くぁ","kwi":"くぃ","kwu":"くぅ","kwe":"くぇ","kwo":"くぉ","gwa":"ぐぁ","gwi":"ぐぃ","gwu":"ぐぅ","gwe":"ぐぇ","gwo":"ぐぉ","za":"ざ","zi":"じ","zu":"ず","ze":"ぜ","zo":"ぞ","ja":"じゃ","ji":"じ","ju":"じゅ","je":"じぇ","jo":"じょ","jya":"じゃ","jyi":"じぃ","jyu":"じゅ","jye":"じぇ","jyo":"じょ","ta":"た","ti":"ち","tu":"つ","tsu":"つ","te":"て","to":"と","da":"だ","di":"ぢ","du":"づ","de":"で","do":"ど","xtu":"っ","xtsu":"っ","ltu":"っ","ltsu":"っ","na":"な","ni":"に","nu":"ぬ","ne":"ね","no":"の","ha":"は","hi":"ひ","hu":"ふ","he":"へ","ho":"ほ","ba":"ば","bi":"び","bu":"ぶ","be":"べ","bo":"ぼ","pa":"ぱ","pi":"ぴ","pu":"ぷ","pe":"ぺ","po":"ぽ","ma":"ま","mi":"み","mu":"む","me":"め","mo":"も","xya":"ゃ","lya":"ゃ","ya":"や","wyi":"ゐ","xyu":"ゅ","lyu":"ゅ","yu":"ゆ","wye":"ゑ","xyo":"ょ","lyo":"ょ","yo":"よ","ra":"ら","ri":"り","ru":"る","re":"れ","ro":"ろ","xwa":"ゎ","lwa":"ゎ","wa":"わ","wi":"うぃ","we":"うぇ","wo":"を","wha":"うぁ","whi":"うぃ","whu":"う","whe":"うぇ","who":"うぉ",";":"ー","zd":"゛","zf":"゜","xd":"゙","xf":"゚","xku":"ㇰ","lku":"ㇰ","xsi":"ㇱ","xshi":"ㇱ","lsi":"ㇱ","lshi":"ㇱ","xsu":"ㇲ","lsu":"ㇲ","xto":"ㇳ","lto":"ㇳ","xnu":"ㇴ","lnu":"ㇴ","xha":"ㇵ","lha":"ㇵ","xhi":"ㇶ","lhi":"ㇶ","xhu":"ㇷ","lhu":"ㇷ","xpu":"ㇷ゚","lpu":"ㇷ゚","xhe":"ㇸ","lhe":"ㇸ","xho":"ㇹ","lho":"ㇹ","xmu":"ㇺ","lmu":"ㇺ","xra":"ㇻ","lra":"ㇻ","xri":"ㇼ","lri":"ㇼ","xru":"ㇽ","lru":"ㇽ","xre":"ㇾ","lre":"ㇾ","xro":"ㇿ","lro":"ㇿ"}';
 let romajiToHiraganaDic = JSON.parse(romajiToHiraganaDicJSON)
-var mainThis = new Main(romajiToHiraganaDic);
+i2c.openPromisified(1).then(i2c1 => {
+  const wbuf = Buffer.from([0x0])
+  i2c1.i2cWrite(0x08, wbuf.length, wbuf)
+  .then(data => {
+    console.log(data)
+  })
+  //
+  var mainThis = new Main(romajiToHiraganaDic, i2c1);
+  // 点字の入力処理
+  var pushedKeys = []
+  var kouhoList = []
+  var timerId = null
+  const enterInterval = 500; // 500ms未操作だった場合に確定する。
 
-// 点字の入力処理
-var pushedKeys = []
-var kouhoList = []
-var timerId = null
-const enterInterval = 500; // 500ms未操作だった場合に確定する。
-
-var keypress = require('keypress');
-
-keypress(process.stdin);
-process.stdin.on('keypress', (ch, key)=>{
-  if (key && key.ctrl && key.name == 'c') {
-    process.stdin.pause();
-  }
-
-  let keyName = ch
-  if (keyName == undefined) {
-    return null;
-  }
-  if (keyName == "NumpadDecimal" || keyName == ".") {
-    mainThis.romajiText = mainThis.romajiText.slice(0, -1);
-    pushedKeys = []
-    return null;
-  }
-
-    var tenji = keyCodeToTenji(keyName);
-    if (tenji == undefined) {
+  keypress(process.stdin);
+  process.stdin.on('keypress', (ch, key)=>{
+    /*
+    if (key && key.ctrl && key.name == 'c') {
+      process.stdin.pause();
+    }
+    */
+    let keyNameCh = ch
+    let keyNameKey = undefined
+    if (key != undefined) {
+      keyNameKey = key.name
+    }
+    // 特殊なキーの振り分け
+    if (keyNameKey == "escape") {
+      // escは無視する。
+      return null;
+    } else if (keyNameKey == "return") {
+      // Enter
+      console.log("Enter")
+      const wbuf = Buffer.from([0x13])
+      i2c1.i2cWrite(0x08, wbuf.length, wbuf)
+      .then(data => {
+        console.log(data)
+      })
+      return null;
+    } else if (keyNameKey == "backspace") {
+      // BackSpace
+      console.log("BackSpace")
+      const wbuf = Buffer.from([0x08])
+      i2c1.i2cWrite(0x08, wbuf.length, wbuf)
+      .then(data => {
+        console.log(data)
+      })
       return null;
     }
-    console.log(tenji);
-    pushedKeys.push(tenji)
-    for (let text in allTable) {
-      if (JSON.stringify(allTable[text].sort()) == JSON.stringify(pushedKeys.sort())) {
-        kouhoList.push(text)
+    /*
+    else if (keyNameKey == "tab") {
+      // Shift
+      console.log("Shift")
+      return null;
+    } else if (keyNameCh == "/" && keyNameKey == undefined) {
+      // Option
+      console.log("Option")
+      return null;
+    } else if (keyNameCh == "*" && keyNameKey == undefined) {
+      // Command
+      console.log("Command")
+      return null;
+    } else if (keyNameCh == "-" && keyNameKey == undefined) {
+      // 英
+      console.log("英")
+      return null;
+    } else if (keyNameCh == "+" && keyNameKey == undefined) {
+      // かな
+      console.log("かな")
+      return null;
+    }
+    */
+  
+      var tenji = keyCodeToTenji(keyNameCh);
+      if (tenji == undefined) {
+        // 7, 8, 4, 5, 1, 2以外のキーだった場合終了
+        return null;
       }
-    }
-    if (timerId != null) {
-      clearTimeout(timerId)
-    }
-    timerId = setTimeout(()=>{
-      if (kouhoList[kouhoList.length-1] == "dakuten") {
-        mainThis.isDakutenMode = true
-      } else if (kouhoList[kouhoList.length-1] == "handakuten") {
-        if (!mainThis.isAlphabetMode) {
-          mainThis.isHanDakutenMode = true
-        } else {
-          mainThis.isLargeAlphabetMode = true
+
+      pushedKeys.push(tenji)
+      for (let text in allTable) {
+        if (JSON.stringify(allTable[text].sort()) == JSON.stringify(pushedKeys.sort())) {
+          kouhoList.push(text)
         }
-      } else if (kouhoList[kouhoList.length-1] == "suufu") {
-        mainThis.isSuujiMode = true
-      } else if (kouhoList[kouhoList.length-1] == "gaijifu") {
-        mainThis.isAlphabetMode = true
-      } else if (kouhoList[kouhoList.length-1] == "tunagifu") {
-        mainThis.isSuujiMode = false
-        mainThis.isAlphabetMode = false
-        mainThis.isLargeAlphabetMode = false
-      } else if (kouhoList[kouhoList.length-1] == "youonnfu") {
-        mainThis.isYouonnMode = true
-      } else if (kouhoList[kouhoList.length-1] == "dakuyouonnfu") {
-        mainThis.isDakuYouonnMode = true
-      } else if (kouhoList[kouhoList.length-1] == "handakuyouonnfu") {
-        mainThis.isHanDakuYouonnMode = true
-      } else {
-        var dispText = kouhoList[kouhoList.length-1];
-        if (mainThis.isDakutenMode) {
-          dispText = toDakuten(dispText)
-        } else if (mainThis.isHanDakutenMode) {
-          dispText = toHanDakuten(dispText)
-        } else if (mainThis.isSuujiMode) {
-          dispText = toSuuji(dispText)
-        } else if (mainThis.isAlphabetMode) {
-          if (mainThis.isLargeAlphabetMode) {
-            dispText = toLargeAlphabet(dispText)
+      }
+      if (timerId != null) {
+        clearTimeout(timerId)
+      }
+      timerId = setTimeout(()=>{
+        if (kouhoList[kouhoList.length-1] == "dakuten") {
+          mainThis.isDakutenMode = true
+        } else if (kouhoList[kouhoList.length-1] == "handakuten") {
+          if (!mainThis.isAlphabetMode) {
+            mainThis.isHanDakutenMode = true
           } else {
-            dispText = toAlphabet(dispText)
+            mainThis.isLargeAlphabetMode = true
           }
-        } else if (mainThis.isYouonnMode) {
-          dispText = toYouonn(dispText)
-        } else if (mainThis.isDakuYouonnMode) {
-          dispText = toDakuYouonn(dispText)
-        } else if (mainThis.isHanDakuYouonnMode) {
-          dispText = toHanDakuYouonn(dispText)
+        } else if (kouhoList[kouhoList.length-1] == "suufu") {
+          mainThis.isSuujiMode = true
+        } else if (kouhoList[kouhoList.length-1] == "gaijifu") {
+          mainThis.isAlphabetMode = true
+        } else if (kouhoList[kouhoList.length-1] == "tunagifu") {
+          mainThis.isSuujiMode = false
+          mainThis.isAlphabetMode = false
+          mainThis.isLargeAlphabetMode = false
+        } else if (kouhoList[kouhoList.length-1] == "youonnfu") {
+          mainThis.isYouonnMode = true
+        } else if (kouhoList[kouhoList.length-1] == "dakuyouonnfu") {
+          mainThis.isDakuYouonnMode = true
+        } else if (kouhoList[kouhoList.length-1] == "handakuyouonnfu") {
+          mainThis.isHanDakuYouonnMode = true
+        } else {
+          var dispText = kouhoList[kouhoList.length-1];
+          if (mainThis.isDakutenMode) {
+            dispText = toDakuten(dispText)
+          } else if (mainThis.isHanDakutenMode) {
+            dispText = toHanDakuten(dispText)
+          } else if (mainThis.isSuujiMode) {
+            dispText = toSuuji(dispText)
+          } else if (mainThis.isAlphabetMode) {
+            if (mainThis.isLargeAlphabetMode) {
+              dispText = toLargeAlphabet(dispText)
+            } else {
+              dispText = toAlphabet(dispText)
+            }
+          } else if (mainThis.isYouonnMode) {
+            dispText = toYouonn(dispText)
+          } else if (mainThis.isDakuYouonnMode) {
+            dispText = toDakuYouonn(dispText)
+          } else if (mainThis.isHanDakuYouonnMode) {
+            dispText = toHanDakuYouonn(dispText)
+          }
+          mainThis.romajiText += dispText+"/"
+          mainThis.isDakutenMode = false
+          mainThis.isHanDakutenMode = false
+          mainThis.isLargeAlphabetMode = false
+          mainThis.isYouonnMode = false
+          mainThis.isDakuYouonnMode = false
+          mainThis.isHanDakuYouonnMode = false
         }
-        mainThis.romajiText += dispText+"/"
-        mainThis.isDakutenMode = false
-        mainThis.isHanDakutenMode = false
-        mainThis.isLargeAlphabetMode = false
-        mainThis.isYouonnMode = false
-        mainThis.isDakuYouonnMode = false
-        mainThis.isHanDakuYouonnMode = false
-      }
-      pushedKeys = []
-    }, enterInterval)
-}); 
-process.stdin.setRawMode(true);
-process.stdin.resume();
+        pushedKeys = []
+      }, enterInterval)
+  }); 
+  process.stdin.setRawMode(true);
+  process.stdin.resume();
+  //
+}).catch(console.log);
